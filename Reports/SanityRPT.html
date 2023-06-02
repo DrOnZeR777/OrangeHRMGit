@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>SanityRPT.html</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>SanityRPT.html</h1>
+    <p>Report generated on 02-Jun-2023 at 18:21:50 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>BUILD_ID</td>
+        <td>1</td></tr>
+      <tr>
+        <td>BUILD_NUMBER</td>
+        <td>1</td></tr>
+      <tr>
+        <td>BUILD_TAG</td>
+        <td>jenkins-OrangeHRM-1</td></tr>
+      <tr>
+        <td>BUILD_URL</td>
+        <td><a href="http://localhost:8080/job/OrangeHRM/1/" target="_blank">http://localhost:8080/job/OrangeHRM/1/</a></td></tr>
+      <tr>
+        <td>CI</td>
+        <td>true</td></tr>
+      <tr>
+        <td>EXECUTOR_NUMBER</td>
+        <td>1</td></tr>
+      <tr>
+        <td>Environment</td>
+        <td>Test</td></tr>
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk-17</td></tr>
+      <tr>
+        <td>JENKINS_URL</td>
+        <td><a href="http://localhost:8080/" target="_blank">http://localhost:8080/</a></td></tr>
+      <tr>
+        <td>JOB_NAME</td>
+        <td>OrangeHRM</td></tr>
+      <tr>
+        <td>Module Name</td>
+        <td>Employee</td></tr>
+      <tr>
+        <td>NODE_NAME</td>
+        <td>built-in</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19045-SP0</td></tr>
+      <tr>
+        <td>Project Name</td>
+        <td>OrangeHRM</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.11.3</td></tr>
+      <tr>
+        <td>Tester</td>
+        <td>TestBot1</td></tr>
+      <tr>
+        <td>WORKSPACE</td>
+        <td>C:\Practice\Day33-Reading,Writing,XL file\OrangeHRM</td></tr></table>
+    <h2>Summary</h2>
+    <p>5 tests ran in 135.94 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">3 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">testcases/test_Addemp_DDT.py::Test_Add_Emp_DDT::test_addEmp_DDT_005</td>
+          <td class="col-duration">125.37</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw1] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/>[gw1] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw1] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/><br/>self = &lt;testcases.test_Addemp_DDT.Test_Add_Emp_DDT object at 0x00000207EF3E2310&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;89ccd9a73f389d6c1914ac64e28d9734&quot;)&gt;<br/><br/>    @pytest.mark.sanity<br/>    def test_addEmp_DDT_005(self, setup):<br/>    <br/>        self.log.info(&quot;test_addEmp_003 is started....&quot;)<br/>        self.site = setup  # Fetching site from web browser<br/>        self.log.info(&quot;Fetching site from web browser....&quot;)<br/>        self.site.get(self.url)         #Calling Class variable<br/>        self.log.info(&quot;Calling class variable....&quot;)<br/>    <br/>        self.lp = loginpage(self.site)  # object created for loginpage<br/>    <br/>        self.lp.Enter_Username(self.username)  # passing argument for username<br/>        self.log.info(&quot;Entering USERNAME----&gt;&quot;+self.username)<br/>    <br/>        self.lp.Enter_Password(self.password)  # passing argument for password<br/>        self.log.info(&quot;Entering PASSWORD----&gt;&quot;+self.password)<br/>    <br/>        self.lp.Click_Login()  # Click on login<br/>        self.log.info(&quot;Clicking on Login..&quot;)<br/>    <br/>        self.rows = XLutils.getrowCount(self.path, &#x27;Sheet1&#x27;)<br/>        self.log.info(&quot;Reading Data from Excel File......&quot;)<br/>        print(&quot;Number of ROWs are ----&gt;&quot;, self.rows)<br/>    <br/>        self.ae = AddEmp(self.site)  # object created for AddEmp<br/>        self.ae.Click_PIM()  # function call for PIM<br/>        self.log.info(&quot;Clicking on PIM..&quot;)<br/>    <br/>        self.ae.Click_Add()  # function call for Add<br/>        self.log.info(&quot;Clicking on Add button..&quot;)<br/>        time.sleep(5)  # Wait for 5 seconds<br/>    <br/>    <br/>        status_list = []<br/>        for r in range(2,self.rows+1):<br/>            self.FirstName = XLutils.readData(self.path,&#x27;Sheet1&#x27;,r,2)<br/>            self.MiddleName = XLutils.readData(self.path, &#x27;Sheet1&#x27;, r, 3)<br/>            self.LastName = XLutils.readData(self.path, &#x27;Sheet1&#x27;, r, 4)<br/>    <br/>            self.ae.Add_FirstName(self.FirstName)  # passing argument for FirstName<br/>            self.log.info(&quot;Entering first Name..&quot;+self.FirstName)<br/>    <br/>            self.ae.Add_MiddleName(self.MiddleName)  # passing argument for MiddleName<br/>            self.log.info(&quot;Entering Middle Name..&quot;+self.MiddleName)<br/>    <br/>            self.ae.Add_LastName(self.LastName)  # passing argument for LastName<br/>            self.log.info(&quot;Entering Last Name..&quot;+self.LastName)<br/>    <br/>            #time.sleep(2)  # wait for 2 seconds<br/>            self.ae.Click_Save()  # function call for save<br/>            self.log.info(&quot;Clicking On Save..&quot;)<br/>    <br/>            if self.ae.Add_Emp_Status() == True:  # conditional menu element check<br/>                self.ae.Click_Add_Emp()<br/>                time.sleep(2)<br/>                status_list.append(&quot;Pass&quot;)      #List to check status of task<br/>                XLutils.writeData(self.path,&#x27;Sheet1&#x27;,r,5,&quot;Pass&quot;)    #Writing data into file on condition if Passed<br/>                self.site.save_screenshot(&quot;C:\\Practice\\Day33-Reading,Writing,XL file\\OrangeHRM\\ScreenShots\\Add_Emp_Passed.png&quot;)<br/>                self.log.info(&quot;Taking Screenshots on LogIn Passed..&quot;)<br/>                self.log.info(&quot;test_addEmp_003 is Passed....&quot;)<br/>            else:<br/>                status_list.append(&quot;Fail&quot;)          #List to check status of task<br/>                XLutils.writeData(self.path, &#x27;Sheet1&#x27;, r, 5, &quot;Failed&quot;)  #Writing data into file on condition if failed<br/>                self.site.save_screenshot(&quot;C:\\Practice\\Day33-Reading,Writing,XL file\\OrangeHRM\\ScreenShots\\Add_Emp_Failed.png&quot;)<br/>                self.log.info(&quot;Taking Screenshots on LogIn Failed..&quot;)<br/>    <br/>        print(status_list)              #Printing status list<br/>    <br/>    <br/>        self.lp.Click_MenuButton()  # function call for Menubutton<br/>        self.log.info(&quot;Clicking on Menu Button..&quot;)<br/>        time.sleep(2)<br/>    <br/>        self.lp.Click_Logout()  # function call for Logout<br/>        self.log.info(&quot;Clicking on Log Out Button...&quot;)<br/>    <br/>        self.site.close()  # closing the browser page<br/>    <br/>        if &quot;Fail&quot; not in status_list:<br/>            self.log.info(&quot;test_addEmp_005 is Passed....&quot;)<br/>            assert True<br/>        else:<br/>            self.log.info(&quot;test_addEmp_005 is Failed....&quot;)<br/>&gt;           assert False<br/><span class="error">E           assert False</span><br/><br/>testcases\test_Addemp_DDT.py:105: AssertionError[gw1] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/> ------------------------------Captured stdout call------------------------------ <br/>Number of ROWs are ----&gt; 5
+[&#x27;Pass&#x27;, &#x27;Fail&#x27;, &#x27;Pass&#x27;, &#x27;Pass&#x27;]
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:25 test_addEmp_003 is started....
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:27 Fetching site from web browser....
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:29 Calling class variable....
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:34 Entering USERNAME----&gt;Admin
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:37 Entering PASSWORD----&gt;admin123
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:40 Clicking on Login..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:43 Reading Data from Excel File......
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:48 Clicking on PIM..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:51 Clicking on Add button..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:62 Entering first Name..A
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:65 Entering Middle Name..B
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:68 Entering Last Name..C
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:72 Clicking On Save..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:80 Taking Screenshots on LogIn Passed..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:81 test_addEmp_003 is Passed....
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:62 Entering first Name..P
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:65 Entering Middle Name..Q
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:68 Entering Last Name..R
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:72 Clicking On Save..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:86 Taking Screenshots on LogIn Failed..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:62 Entering first Name..X
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:65 Entering Middle Name..Y
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:68 Entering Last Name..Z
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:72 Clicking On Save..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:80 Taking Screenshots on LogIn Passed..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:81 test_addEmp_003 is Passed....
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:62 Entering first Name..A
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:65 Entering Middle Name..J
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:68 Entering Last Name..K
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:72 Clicking On Save..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:80 Taking Screenshots on LogIn Passed..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:81 test_addEmp_003 is Passed....
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:92 Clicking on Menu Button..
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:96 Clicking on Log Out Button...
+INFO     Test_Add_Emp_DDT:test_Addemp_DDT.py:104 test_addEmp_005 is Failed....<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">testcases/test_empserach.py::Test_Search_Emp::test_SerachEmp_005</td>
+          <td class="col-duration">43.60</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/>[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/><br/>self = &lt;testcases.test_empserach.Test_Search_Emp object at 0x0000024CE09F9450&gt;<br/>setup = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;d264d1441dc8b11c8230dc59cafe5874&quot;)&gt;<br/><br/>    @pytest.mark.sanity<br/>    def test_SerachEmp_005(self, setup):<br/>    <br/>        self.log.info(&quot;test_SerachEmp_005 is started....&quot;)<br/>        self.site = setup  # Fetching site from web browser<br/>        self.log.info(&quot;Fetching site from web browser....&quot;)<br/>        self.site.get(self.url)  # Calling Class variable<br/>        self.log.info(&quot;Calling class variable....&quot;)<br/>    <br/>        self.lp = loginpage(self.site)  # object created for loginpage<br/>    <br/>        self.lp.Enter_Username(self.username)  # passing argument for username<br/>        self.log.info(&quot;Entering USERNAME----&gt;&quot; + self.username)<br/>    <br/>        self.lp.Enter_Password(self.password)  # passing argument for password<br/>        self.log.info(&quot;Entering PASSWORD----&gt;&quot; + self.password)<br/>    <br/>        self.lp.Click_Login()  # Click on login<br/>        self.log.info(&quot;Clicking on Login..&quot;)<br/>    <br/>        self.ae = AddEmp(self.site)  # object created for AddEmp<br/>        self.ae.Click_PIM()  # function call for PIM<br/>        self.log.info(&quot;Clicking on PIM..&quot;)<br/>    <br/>        self.es = EmpSearch(self.site)  # Object created for empserach page object<br/>    <br/>        time.sleep(5)<br/>        self.es.Enter_EmpName(&quot;Paul&quot;)<br/>        self.log.info(&quot;Entering employee Name...&quot;)<br/>    <br/>        time.sleep(2)<br/>        self.es.Click_SerachButton()<br/>        self.log.info(&quot;Clickin on Search Button...&quot;)<br/>    <br/>        time.sleep(5)<br/>        print(self.es.Serach_Result())<br/>        if self.es.Serach_Result() == True:<br/>    <br/>            self.log.info(&quot;Serach Found.......&quot;)<br/>            self.lp.Click_MenuButton()<br/>            self.log.info(&quot;Clicked on Menu Button....&quot;)<br/>            time.sleep(3)<br/>            self.lp.Click_Logout()<br/>            self.log.info(&quot;Clicked on Log Out Button....&quot;)<br/>            assert True<br/>            self.log.info(&quot;test_SerachEmp_005 is passed....&quot;)<br/>        else:<br/>            self.log.info(&quot;Serach not Found.......&quot;)<br/>            self.log.info(&quot;test_SerachEmp_005 is falied....&quot;)<br/>&gt;           assert False<br/><span class="error">E           assert False</span><br/><br/>testcases\test_empserach.py:67: AssertionError[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/> ------------------------------Captured stdout call------------------------------ <br/>False
+<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Search_Emp:test_empserach.py:21 test_SerachEmp_005 is started....
+INFO     Test_Search_Emp:test_empserach.py:23 Fetching site from web browser....
+INFO     Test_Search_Emp:test_empserach.py:25 Calling class variable....
+INFO     Test_Search_Emp:test_empserach.py:30 Entering USERNAME----&gt;Admin
+INFO     Test_Search_Emp:test_empserach.py:33 Entering PASSWORD----&gt;admin123
+INFO     Test_Search_Emp:test_empserach.py:36 Clicking on Login..
+INFO     Test_Search_Emp:test_empserach.py:40 Clicking on PIM..
+INFO     Test_Search_Emp:test_empserach.py:46 Entering employee Name...
+INFO     Test_Search_Emp:test_empserach.py:50 Clickin on Search Button...
+INFO     Test_Search_Emp:test_empserach.py:65 Serach not Found.......
+INFO     Test_Search_Emp:test_empserach.py:66 test_SerachEmp_005 is falied....<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login.py::Test_login::test_login_002</td>
+          <td class="col-duration">52.11</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw3] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/>[gw3] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw3] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw3] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_login:test_Login.py:49 test_login_002 is Started....
+INFO     Test_login:test_Login.py:51 Opening Browser.....
+INFO     Test_login:test_Login.py:53 Go to this url---&gt;https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+INFO     Test_login:test_Login.py:62 Entering the USERNAME----&gt;Admin
+INFO     Test_login:test_Login.py:66 Entering the PASSWORD----&gt;admin123
+INFO     Test_login:test_Login.py:70 Clicked on Log In...
+INFO     Test_login:test_Login.py:79 Clicked on Menu Button....
+INFO     Test_login:test_Login.py:82 Clicked on Log Out Button....
+INFO     Test_login:test_Login.py:84 test_login_002 is passed
+INFO     Test_login:test_Login.py:92 test_login_002 is completed.....<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Login.py::Test_login::test_pagetitle_001</td>
+          <td class="col-duration">34.69</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw2] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/>[gw2] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw2] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw2] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_login:test_Login.py:23 Test page title case started...
+INFO     Test_login:test_Login.py:25 Opening Browser.....
+INFO     Test_login:test_Login.py:27 Go to this url---&gt;https://opensource-demo.orangehrmlive.com/web/index.php/auth/login
+INFO     Test_login:test_Login.py:32 test_page_title_001 is passed
+INFO     Test_login:test_Login.py:33 Page title is---&gt;OrangeHRM
+INFO     Test_login:test_Login.py:39 test_page_title_001 is Completed...
+INFO     Test_login:test_Login.py:41 info
+WARNING  Test_login:test_Login.py:42 warning
+ERROR    Test_login:test_Login.py:43 error
+CRITICAL Test_login:test_Login.py:44 critical<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">testcases/test_Addemp.py::Test_Add_Emp::test_addEmp_003</td>
+          <td class="col-duration">78.47</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/>[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe[gw0] win32 -- Python 3.11.3 C:\Program Files\Python311\python.exe<br/> -------------------------------Captured log call-------------------------------- <br/>INFO     Test_Add_Emp:test_Addemp.py:21 test_addEmp_003 is started....
+INFO     Test_Add_Emp:test_Addemp.py:23 Fetching site from web browser....
+INFO     Test_Add_Emp:test_Addemp.py:25 Calling class variable....
+INFO     Test_Add_Emp:test_Addemp.py:30 Entering USERNAME----&gt;Admin
+INFO     Test_Add_Emp:test_Addemp.py:33 Entering PASSWORD----&gt;admin123
+INFO     Test_Add_Emp:test_Addemp.py:36 Clicking on Login..
+INFO     Test_Add_Emp:test_Addemp.py:40 Clicking on PIM..
+INFO     Test_Add_Emp:test_Addemp.py:43 Clicking on Add button..
+INFO     Test_Add_Emp:test_Addemp.py:47 Entering first Name..
+INFO     Test_Add_Emp:test_Addemp.py:50 Entering Middle Name..
+INFO     Test_Add_Emp:test_Addemp.py:53 Entering Last Name..
+INFO     Test_Add_Emp:test_Addemp.py:57 Clicking On Save..
+INFO     Test_Add_Emp:test_Addemp.py:62 Taking Screenshots on LogIn Passed..
+INFO     Test_Add_Emp:test_Addemp.py:65 Clicking on Menu Button..
+INFO     Test_Add_Emp:test_Addemp.py:68 Clicking on Log Out Button...
+INFO     Test_Add_Emp:test_Addemp.py:70 test_addEmp_003 is Passed....
+INFO     Test_Add_Emp:test_Addemp.py:79 test_addEmp_003 is Completed Successfully....<br/></div></td></tr></tbody></table></body></html>
